@@ -1,0 +1,13 @@
+blog:
+  build: blog
+  container_name: randomblog
+  command: "node app"
+  volumes:
+    - ./blog:/app
+
+service:
+  build: service
+  container_name: oauth
+  command: "node app"
+  volumes:
+    - ./service:/app

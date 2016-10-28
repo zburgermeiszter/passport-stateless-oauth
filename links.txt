@@ -19,3 +19,7 @@ http://stackoverflow.com/questions/33241883/nodejs-passport-facebook-authenticat
 https://bitbucket.org/resurge/sessionless-token-auth-with-express
 https://www.npmjs.com/package/passport-jwt-cookiecombo
 https://www.npmjs.com/package/passport-custom
+
+https://github.com/expressjs/cookie-parser
+
+Cookie listener: http://jsfiddle.net/ArondeParon/5RsTm/4/

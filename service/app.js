@@ -1,33 +1,14 @@
 var express = require('express');
 var passport = require('passport');
 var util = require('util');
-//var session = require('express-session');
-var bodyParser = require('body-parser');
-var methodOverride = require('method-override');
-var GitHubStrategy = require('passport-github2').Strategy;
-var BearerStrategy = require('passport-http-bearer').Strategy;
-var partials = require('express-partials');
 
+var bodyParser = require('body-parser');
+var GitHubStrategy = require('passport-github2').Strategy;
+var partials = require('express-partials');
 
 var GITHUB_CLIENT_ID = "58f907375348da52da8f";
 var GITHUB_CLIENT_SECRET = "7e41b558ace35dcdecb9bf791b83ca40d2f88494";
-
-
-// Passport session setup.
-//   To support persistent login sessions, Passport needs to be able to
-//   serialize users into and deserialize users out of the session.  Typically,
-//   this will be as simple as storing the user ID when serializing, and finding
-//   the user by ID when deserializing.  However, since this example does not
-//   have a database of user records, the complete GitHub profile is serialized
-//   and deserialized.
-passport.serializeUser(function(user, done) {
-  done(null, user);
-});
-
-passport.deserializeUser(function(obj, done) {
-  done(null, obj);
-});
-
+var GITHUB_CALLBACK_URL = "http://127.0.1.2/auth/github/callback?setcookieurl=http://127.0.1.1/setcookie.html";
 
 // Use the GitHubStrategy within Passport.
 //   Strategies in Passport require a `verify` function, which accept
@@ -36,18 +17,11 @@ passport.deserializeUser(function(obj, done) {
 passport.use(new GitHubStrategy({
     clientID: GITHUB_CLIENT_ID,
     clientSecret: GITHUB_CLIENT_SECRET,
-    //callbackURL: "http://oauth.docker:3000/auth/github/callback"
-    callbackURL: 'http://randomblog.docker:3000/setcookie.html'
-      //?setcookieurl=http://randomblog.docker:3000/setcookie.html
+    callbackURL: GITHUB_CALLBACK_URL
   },
   function(accessToken, refreshToken, profile, done) {
 
     profile.access_token = accessToken;
-
-    console.log('AT',accessToken);
-    console.log('RT',refreshToken);
-    console.log('profile', profile);
-    console.log('done', done);
 
     // asynchronous verification, for effect...
     process.nextTick(function () {
@@ -61,73 +35,20 @@ passport.use(new GitHubStrategy({
   }
 ));
 
-passport.use(
-  new BearerStrategy(
-    function(token, done) {
-      console.log("Token received:", token);
-      return done(null,
-        {
-          id: 0xd34db33f4d4d,
-          token: token
-
-        }, {
-          scope: 'all'
-        });
-      // User.findOne({ access_token: token },
-      //   function(err, user) {
-      //     if(err) {
-      //       return done(err)
-      //     }
-      //     if(!user) {
-      //       return done(null, false)
-      //     }
-      //
-      //     return done(null, user, { scope: 'all' })
-      //   }
-      // );
-    }
-  )
-);
-
-
-
-
 var app = express();
 
 // configure Express
-app.set('views', __dirname + '/views');
-app.set('view engine', 'ejs');
 app.use(partials());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(methodOverride());
-//app.use(session({ secret: 'keyboard cat', resave: false, saveUninitialized: false }));
-// Initialize Passport!  Also use passport.session() middleware, to support
-// persistent login sessions (recommended).
 app.use(passport.initialize());
-//app.use(passport.session());
-app.use(express.static(__dirname + '/public'));
-
-
-app.get('/', function(req, res){
-  res.render('index', { user: req.user });
-});
 
 app.get(
   '/profile',
-  passport.authenticate('bearer', { session: false }),
   function(req, res) {
-    res.send("LOGGED IN as " + req.user.id + " - <a href=\"/logout\">Log out</a>");
+    res.send(JSON.stringify(req.cookie));
   }
 );
-
-app.get('/account', ensureAuthenticated, function(req, res){
-  res.render('account', { user: req.user });
-});
-
-app.get('/login', function(req, res){
-  res.render('login', { user: req.user });
-});
 
 // GET /auth/github
 //   Use passport.authenticate() as route middleware to authenticate the
@@ -138,11 +59,7 @@ app.get('/auth/github',
   passport.authenticate('github', {
     scope: [ 'user:email' ],
     session: false
-  }),
-  function(req, res){
-    // The request will be redirected to GitHub for authentication, so this
-    // function will not be called.
-  });
+  }));
 
 // GET /auth/github/callback
 //   Use passport.authenticate() as route middleware to authenticate the
@@ -155,31 +72,14 @@ app.get('/auth/github/callback',
     session: false
   }),
   function(req, res) {
-    //res.redirect('/');
-    console.log(req.user._json);
-    console.log("CALLABCK");
-
-
-    /**
-     * TODO: Don't need to save access_token!
-     * Simply encrypt and save user to cookie.
-     * That's it.
-     * As we don't need to communicate with the social apis
-     * after pulling user data.
-     *
-     *
-     *
-     */
-
-
-    res.cookie('xgithubToken', req.user.access_token);
-    res.cookie('xuser', req.user._json);
-
-    //res.redirect("/profile?access_token=" + req.user.access_token);
-    // if(req.query.setcookieurl) {
-    //   res.redirect(req.query.setcookieurl);
-    // }
-    res.redirect('http://randomblog.docker:3000/setcookie.html?hhh=xxx#!sdfsdfyyyuxw');
+    console.log(req.user);
+    if(req.query.setcookieurl) {
+      res.cookie('staticmanSocialUser', new Buffer(JSON.stringify(req.user)).toString('base64'));
+      //res.cookie('staticmanSocialUser', key.encrypt(req.user, 'base64'));
+      res.redirect(req.query.setcookieurl + '#' + new Buffer(JSON.stringify(req.user._json)).toString('base64'));
+    } else {
+      res.send('Missing setcookieurl');
+    }
   });
 
 app.get('/logout', function(req, res){
@@ -188,14 +88,3 @@ app.get('/logout', function(req, res){
 });
 
 app.listen(3000);
-
-
-// Simple route middleware to ensure user is authenticated.
-//   Use this route middleware on any resource that needs to be protected.  If
-//   the request is authenticated (typically via a persistent login session),
-//   the request will proceed.  Otherwise, the user will be redirected to the
-//   login page.
-function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated()) { return next(); }
-  res.redirect('/login')
-}

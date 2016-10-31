@@ -1,6 +1,9 @@
 var express = require('express');
 var passport = require('passport');
 var util = require('util');
+var zlib = require('zlib');
+var NodeRSA = require('node-rsa');
+var fs = require('fs');
 
 var bodyParser = require('body-parser');
 var GitHubStrategy = require('passport-github2').Strategy;
@@ -22,6 +25,7 @@ passport.use(new GitHubStrategy({
   function(accessToken, refreshToken, profile, done) {
 
     profile.access_token = accessToken;
+    delete profile._raw;
 
     // asynchronous verification, for effect...
     process.nextTick(function () {
@@ -35,6 +39,10 @@ passport.use(new GitHubStrategy({
   }
 ));
 
+// Initialise RSA
+var rsa = new NodeRSA();
+rsa.importKey(fs.readFileSync('private.key'));
+
 var app = express();
 
 // configure Express
@@ -46,7 +54,7 @@ app.use(passport.initialize());
 app.get(
   '/profile',
   function(req, res) {
-    res.send(JSON.stringify(req.cookie));
+
   }
 );
 
@@ -74,9 +82,25 @@ app.get('/auth/github/callback',
   function(req, res) {
     console.log(req.user);
     if(req.query.setcookieurl) {
-      res.cookie('staticmanSocialUser', new Buffer(JSON.stringify(req.user)).toString('base64'));
+
+      var cookie = {
+        secretProfile: zlib.deflateSync(
+          rsa.encrypt(
+            Buffer.from(
+              JSON.stringify(req.user)
+              , 'utf8'
+            )
+          )
+        ),
+        publicProfile: req.user._json
+      };
+
+      var cookieJSONString = JSON.stringify(cookie);
+
+      console.log(cookieJSONString.length);
+
       //res.cookie('staticmanSocialUser', key.encrypt(req.user, 'base64'));
-      res.redirect(req.query.setcookieurl + '#' + new Buffer(JSON.stringify(req.user._json)).toString('base64'));
+      res.redirect(req.query.setcookieurl + '#' + new Buffer(cookieJSONString).toString('base64'));
     } else {
       res.send('Missing setcookieurl');
     }

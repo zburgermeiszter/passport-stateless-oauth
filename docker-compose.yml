@@ -1,9 +1,8 @@
-blog:
-  build: blog
-  container_name: randomblog
+static:
+  build: static
   command: "node app"
   volumes:
-    - ./blog:/app
+    - ./static:/app
   ports:
     - "127.0.1.1:80:3000"
 

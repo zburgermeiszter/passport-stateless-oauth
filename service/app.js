@@ -7,7 +7,6 @@ var fs = require('fs');
 
 var bodyParser = require('body-parser');
 var GitHubStrategy = require('passport-github2').Strategy;
-var partials = require('express-partials');
 
 var GITHUB_CLIENT_ID = "58f907375348da52da8f";
 var GITHUB_CLIENT_SECRET = "7e41b558ace35dcdecb9bf791b83ca40d2f88494";
@@ -25,7 +24,7 @@ passport.use(new GitHubStrategy({
   function(accessToken, refreshToken, profile, done) {
 
     profile.access_token = accessToken;
-    delete profile._raw;
+    profileCleanup(profile);
 
     // asynchronous verification, for effect...
     process.nextTick(function () {
@@ -46,7 +45,6 @@ rsa.importKey(fs.readFileSync('private.key'));
 var app = express();
 
 // configure Express
-app.use(partials());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(passport.initialize());
@@ -80,30 +78,16 @@ app.get('/auth/github/callback',
     session: false
   }),
   function(req, res) {
-    console.log(req.user);
-    if(req.query.setcookieurl) {
-
-      var cookie = {
-        secretProfile: zlib.deflateSync(
-          rsa.encrypt(
-            Buffer.from(
-              JSON.stringify(req.user)
-              , 'utf8'
-            )
-          )
-        ),
-        publicProfile: req.user._json
-      };
-
-      var cookieJSONString = JSON.stringify(cookie);
-
-      console.log(cookieJSONString.length);
-
-      //res.cookie('staticmanSocialUser', key.encrypt(req.user, 'base64'));
-      res.redirect(req.query.setcookieurl + '#' + new Buffer(cookieJSONString).toString('base64'));
-    } else {
-      res.send('Missing setcookieurl');
+    if(req.query.setcookieurl === undefined) {
+      return res.send('Missing setcookieurl');
     }
+
+    var cookie = prepareCookie(req.user);
+
+    var cookieJSONString = JSON.stringify(cookie);
+
+    //res.cookie('staticmanSocialUser', key.encrypt(req.user, 'base64'));
+    res.redirect(req.query.setcookieurl + '#' + new Buffer(cookieJSONString).toString('base64'));
   });
 
 app.get('/logout', function(req, res){
@@ -112,3 +96,34 @@ app.get('/logout', function(req, res){
 });
 
 app.listen(3000);
+
+
+
+function prepareCookie(profile) {
+  var user = {};
+  Object.assign(user, profile);
+
+  var publicProfile = {};
+  Object.assign(publicProfile, profile);
+  delete publicProfile.access_token;
+
+  return {
+    secretProfile: zlib.deflateSync(
+      rsa.encrypt(
+        Buffer.from(
+          JSON.stringify(user)
+          , 'utf8'
+        )
+      )
+    ).toString('base64'),
+    publicProfile: publicProfile
+  };
+}
+
+function profileCleanup(profile) {
+  profile.avatar_url = profile._json.avatar_url;
+  profile.gravatar_id = profile._json.gravatar_id;
+
+  delete profile._raw;
+  delete profile._json;
+}
